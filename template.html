@@ -283,6 +283,20 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 .wrong-item .w-stem { flex:1; }
 .wrong-item .btn-mini { flex-shrink:0; }
 .wrong-item .w-level { flex-shrink:0; font-size:12px; font-weight:600; padding:2px 8px; border-radius:6px; background:var(--bg); color:var(--muted); white-space:nowrap; }
+.wrong-item .w-meta { flex-shrink:0; font-size:11px; color:var(--accent); background:var(--bg); padding:2px 7px; border-radius:5px; white-space:nowrap; }
+.wrong-filters { display:flex; gap:10px; flex-wrap:wrap; }
+.wrong-filters .search-box { margin-bottom:6px; }
+.wrong-filters select.search-box { flex:1; min-width:210px; }
+.wrong-filters input.search-box { flex:2; min-width:210px; }
+@media (max-width:720px){ .wrong-item .w-meta { display:none; } }
+
+/* 学习统计 */
+.st-trend { display:flex; align-items:flex-end; gap:6px; height:120px; margin:14px 0 6px; }
+.st-day { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end; }
+.st-bar { width:100%; max-width:46px; border-radius:5px 5px 0 0; background:var(--accent); min-height:2px; }
+.st-bar.empty { background:var(--border); }
+.st-day-label { font-size:10px; color:var(--muted); white-space:nowrap; }
+.st-day-val { font-size:11px; color:var(--sub); }
 
 /* 题目插图 */
 .q-fig { margin:14px 0 4px; text-align:center; }
@@ -292,6 +306,33 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:99; display:flex;
   align-items:center; justify-content:center; padding:14px; cursor:zoom-out; }
 #lightbox img { max-width:100%; max-height:100%; background:#fff; border-radius:8px; }
+
+/* 配伍题同组小题 */
+.sib-box { margin-top:10px; border:1px dashed var(--border); border-radius:10px; padding:10px 12px; background:var(--bg); }
+.sib-head { font-size:12px; color:var(--muted); margin-bottom:6px; }
+.sib-item { font-size:13.5px; line-height:1.75; }
+.sib-no { display:inline-block; min-width:52px; color:var(--accent); font-weight:500; margin-right:6px; }
+
+/* 模拟考答题卡 */
+.exam-top { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.exam-tools { display:flex; gap:8px; }
+.anscard { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
+.anscard-head { font-size:14px; font-weight:500; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ac-stat { font-size:12px; color:var(--muted); font-weight:400; }
+.ac-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(42px,1fr)); gap:6px; margin-top:12px; max-height:300px; overflow-y:auto; }
+.card-cell { position:relative; padding:8px 0; border-radius:7px; border:1px solid var(--border); background:var(--bg); color:var(--sub); font-size:13px; cursor:pointer; transition:all .15s; }
+.card-cell:hover { border-color:var(--accent); }
+.card-cell.done { background:var(--accent); color:#fff; border-color:var(--accent); }
+.card-cell.marked { border-color:var(--warn); }
+.card-cell.marked::after { content:'●'; position:absolute; top:-1px; right:3px; font-size:9px; color:var(--warn); }
+.card-cell.cellcur { outline:2px solid var(--accent2); outline-offset:1px; }
+/* 章节得分分析 */
+.ch-row { margin:9px 0; }
+.ch-top { display:flex; justify-content:space-between; font-size:13px; gap:10px; }
+.ch-name { color:var(--text); }
+.ch-val { color:var(--sub); white-space:nowrap; }
+.ch-bar { height:6px; border-radius:3px; background:var(--bg); margin-top:4px; overflow:hidden; }
+.ch-fill { height:100%; border-radius:3px; }
 
 /* 分类练习 */
 .topic-item { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
@@ -327,7 +368,7 @@ var CHEAT = __CHEAT__;
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.5';
+var VERSION = 'v1.6';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -344,13 +385,35 @@ var LS = {
 // ========== 全局状态 ==========
 var S = { page:'home', mode:'all', qid:null, history:[], answered:false, theme:LS.get('theme','light'),
           multi_sel:{}, // 多选题已勾选集合
-          simFilter:'all', topic:null };
+          simFilter:'all', topic:null, skipQid:null, wrongType:'all', wrongCat:'all', wrongQ:'' };
 
 // ========== 间隔重复权重 ==========
 function getWeights(){ return LS.get('weights',{}); }
 function getWeight(qid){ var w=getWeights(); return (w[qid]!==undefined)?w[qid]:1.0; }
 function updateWeight(qid, correct){ var w=getWeights(); var cur=(w[qid]!==undefined)?w[qid]:1.0;
   if(correct) cur=Math.max(0.15, cur*0.5); else cur=Math.min(8.0, cur*2.2); w[qid]=cur; LS.set('weights',w); }
+// ===== 统计埋点：按日、按章节 =====
+// 只做记录，不影响判分逻辑。
+function ymd(d){
+  var m = d.getMonth()+1, dd = d.getDate();
+  return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd;
+}
+function bumpDaily(correct){
+  var k = ymd(new Date());
+  var d = LS.get('daily', {});
+  if(!d[k]) d[k] = {t:0, c:0};
+  d[k].t++; if(correct) d[k].c++;
+  var ks = Object.keys(d).sort();
+  while(ks.length > 60){ delete d[ks.shift()]; }     // 只留最近 60 天
+  LS.set('daily', d);
+}
+function bumpCat(q, correct){
+  if(!q || !q.cat) return;
+  var m = LS.get('chstats', {});
+  if(!m[q.cat]) m[q.cat] = {t:0, c:0};
+  m[q.cat].t++; if(correct) m[q.cat].c++;
+  LS.set('chstats', m);
+}
 function weightedPick(pool){ if(!pool.length) return null; var weights=[],tot=0;
   for(var i=0;i<pool.length;i++){ var ww=getWeight(pool[i]); weights.push(ww); tot+=ww; }
   var r=Math.random()*tot, cum=0; for(var i=0;i<pool.length;i++){ cum+=weights[i]; if(r<=cum) return pool[i]; } return pool[pool.length-1]; }
@@ -365,13 +428,14 @@ function render(){
   else if(S.page==='wrong') renderWrong();
   else if(S.page==='topic') renderTopic();
   else if(S.page==='notes') renderNotes();
+  else if(S.page==='stats') renderStats();
   else if(S.page==='exam') renderExam();
   else if(S.page==='setting') renderSetting();
 }
 
 function topbar(active){
   var tabs = [
-    ['首页','home'],['刷题','quiz'],['错题本','wrong'],['分类练习','topic'],['相似题对比','similar'],['速记手册','cheat'],['复习资料','notes']
+    ['首页','home'],['刷题','quiz'],['错题本','wrong'],['分类练习','topic'],['相似题对比','similar'],['速记手册','cheat'],['复习资料','notes'],['学习统计','stats']
   ];
   var html = '<div class="topbar"><span class="brand">医学综合·冲刺刷题</span><span class="sp"></span>';
   for(var i=0;i<tabs.length;i++){
@@ -403,6 +467,25 @@ function figHTML(q){
   return '<div class="q-fig"><img src="'+F.d+'" alt="题目插图" onclick="zoomFig(\''+q.fig+'\')">'+
     (F.cap ? '<div class="q-fig-cap">'+F.cap+' · 点击图片放大</div>' : '<div class="q-fig-cap">点击图片放大</div>')+
     '</div>';
+}
+// ===== 配伍题的同组小题 =====
+// 真实卷面上同一组的小题是并排给出的，刷题时也一并显示，便于对照共用选项作答。
+function siblings(q){
+  if(!q || !q.shared) return [];
+  var out=[];
+  for(var i=0;i<BANK.length;i++){
+    var x=BANK[i];
+    if(x.id!==q.id && x.type==='B' && x.paper===q.paper && x.grp===q.grp) out.push(x);
+  }
+  return out;
+}
+function siblingHTML(q){
+  var sib=siblings(q); if(!sib.length) return '';
+  var h='<div class="sib-box"><div class="sib-head">同组小题 · 与本題共用上面这组备选答案</div>';
+  for(var i=0;i<sib.length;i++){
+    h+='<div class="sib-item"><span class="sib-no">第'+sib[i].n+'题</span><span>'+sib[i].s+'</span></div>';
+  }
+  return h+'</div>';
 }
 function zoomFig(id){
   var F = FIGS[id]; if(!F) return;
@@ -519,7 +602,15 @@ function pickNext(){
   else if(S.mode==='topic'){ if(S.topic!=null){ pool=topicPool(S.topic); if(!pool.length){ for(var i=0;i<BANK.length;i++) pool.push(i); } } }
   else if(S.mode==='topics'){ var tp=[]; for(var ti=0;ti<S.topics.length;ti++){ tp=tp.concat(topicPool(S.topics[ti])); } pool=tp; if(!pool.length){ for(var i=0;i<BANK.length;i++) pool.push(i); } }
   else if(S.mode==='undone'){ var d=getDone(); for(var i=0;i<BANK.length;i++){ if(d.indexOf(i)<0) pool.push(i); } }
+  else if(S.mode==='custom'){ pool=(S.custom||[]).slice(); }
   if(!pool.length){ for(var i=0;i<BANK.length;i++) pool.push(i); }
+  // 「跳过本题」：本次抽题时把刚跳过的那道剔出去，避免立刻又抽到同一题。
+  // 池里只剩一道时不去掉，否则会抽到空。跳过不计入答题记录，也不影响权重。
+  if(S.skipQid != null){
+    var at = pool.indexOf(S.skipQid);
+    if(at >= 0 && pool.length > 1) pool.splice(at, 1);
+    S.skipQid = null;
+  }
   if(S.weakFirst && S.weakFirst.length){
     var wf = S.weakFirst.shift();           // 优先出弱项错题
     if(pool.indexOf(wf)>=0 || S.mode==='all' || S.mode==='wrong' || S.mode==='weak'){ S.qid=wf; }
@@ -529,6 +620,19 @@ function pickNext(){
   }
   S.answered=false; S.multi_sel={};
   render();
+}
+// 按指定题号列表练习（错题本筛选后的重做走这里）
+function practiceList(list){
+  S.mode='custom'; S.custom=(list||[]).slice();
+  S.page='quiz'; S.history=[]; S.answered=false; S.multi_sel={}; S.skipQid=null;
+  if(!S.custom.length){ alert('这一组没有题目。'); return; }
+  pickNext();
+}
+// 跳过本题：不计入答题记录、不影响权重，只是换一题
+function skipQuestion(){
+  if(S.answered) return;
+  if(S.qid != null) S.skipQid = S.qid;
+  pickNext();
 }
 function renderQuiz(){
   var q = BANK[S.qid];
@@ -544,6 +648,7 @@ function renderQuiz(){
     '<div class="q-stem">'+q.s+'</div>'+
     figHTML(q)+
     (q.shared ? '<div style="font-size:12px;color:var(--muted);background:var(--bg);padding:8px 10px;border-radius:8px;margin-top:10px">配伍题 · 本组共用备选答案（'+q.grp+'，同一选项可被同组小题各选一次）</div>' : '')+
+    siblingHTML(q)+
     (q.flag ? '<div style="font-size:12px;color:var(--warn);background:var(--bg);padding:8px 10px;border-radius:8px;margin-top:8px">'+q.flag+'</div>' : '');
 
   if(q.multi){
@@ -587,7 +692,8 @@ function renderQuiz(){
       '<div class="explain" style="margin-top:12px"><div class="exp-title">'+expHead(q)+'</div>'+expBody(q)+'</div></div>';
   }
 
-  mainHTML += '<div class="next-hint">'+(S.answered?'点击「下一题」或按 <kbd>空格</kbd>':'点击选项作答')+'</div>'+
+  mainHTML += '<div class="next-hint">'+(S.answered?'点击「下一题」或按 <kbd>空格</kbd>'
+      :'点击选项作答 · <a href="javascript:skipQuestion()" style="color:var(--accent)">跳过本题 →</a>')+'</div>'+
     (S.answered?'<div class="mobile-next"><button class="btn btn-primary" onclick="pickNext()">下一题 →</button></div>':'')+'</div>';
   var dots=''; for(var d=0;d<S.history.length;d++){ dots+='<span class="dot '+(S.history[d].correct?'ok':'bad')+'">'+(S.history[d].correct?'✓':'✗')+'</span>'; }
   var sideHTML = '<div class="side">'+
@@ -609,6 +715,7 @@ function renderQuiz(){
     '</div>'+
     '<div class="side-actions">'+
       '<button class="btn btn-primary" onclick="pickNext()">下一题</button>'+
+      (S.answered ? '' : '<button class="btn btn-ghost" onclick="skipQuestion()">跳过本题</button>')+
       '<button class="btn btn-ghost" onclick="goTab(\'home\')">结束本轮</button>'+
     '</div></div>';
   app.innerHTML = topbar('quiz') + '<div class="q-wrap">'+mainHTML+sideHTML+'</div>';
@@ -639,6 +746,7 @@ function answer(u){
   if(correct) removeWrong(S.qid); else addWrong(S.qid);
   addDone(S.qid);
   var stats=LS.get('stats',{total:0,correct:0}); stats.total++; if(correct) stats.correct++; LS.set('stats',stats);
+  bumpDaily(correct); bumpCat(q, correct);
   render();
 }
 function answerMulti(){
@@ -659,35 +767,91 @@ function answerMulti(){
   if(correct) removeWrong(S.qid); else addWrong(S.qid);
   addDone(S.qid);
   var stats=LS.get('stats',{total:0,correct:0}); stats.total++; if(correct) stats.correct++; LS.set('stats',stats);
+  bumpDaily(correct); bumpCat(q, correct);
   render();
 }
 
 // ========== 错题本 ==========
 function renderWrong(){
-  var w=getWrong();
-  // 按错误权重降序：错得越多/越近期错的排最前
-  w = w.slice().sort(function(a,b){ return getWeight(b)-getWeight(a); });
+  var all = getWrong().slice().sort(function(a,b){ return getWeight(b)-getWeight(a); });
+  var fType = S.wrongType || 'all', fCat = S.wrongCat || 'all', fQ = S.wrongQ || '';
+
+  var catCount = {};
+  for(var i=0;i<all.length;i++){
+    var c = BANK[all[i]].cat || '未分类';
+    catCount[c] = (catCount[c]||0) + 1;
+  }
+  var cats = Object.keys(catCount).sort(function(a,b){ return catCount[b]-catCount[a]; });
+
   var html = topbar('wrong')+
-    '<div class="card"><h2>错题本 <span style="color:var(--sub);font-size:13px">共 '+w.length+' 题 · 答对一题自动移出 · 按错误次数由多到少排序</span></h2>'+
-    '<div style="margin:12px 0">'+
-      '<button class="btn btn-primary" onclick="startWrong()">全部重做（'+w.length+' 题）</button>'+
-    '</div>';
-  if(w.length===0){
-    html += '<p style="color:var(--sub);line-height:1.8">还没有错题记录。<br>答题时答错的题会自动收进这里，等你答对后自动移出，直到全部清零。</p>';
+    '<div class="card"><h2>错题本 <span style="color:var(--sub);font-size:13px">共 '+all.length+
+      ' 题 · 答对一题自动移出 · 按错误次数由多到少排序</span></h2>';
+  if(all.length === 0){
+    html += '<p style="color:var(--sub);line-height:1.8">还没有错题记录。<br>'
+          + '答题时答错的题会自动收进这里，等你答对后自动移出，直到全部清零。</p></div>';
+    app.innerHTML = html; return;
+  }
+  html += '<div class="filter-row">'
+    + chipWrongType('all','全部') + chipWrongType('A','A 型题')
+    + chipWrongType('B','B 型题') + chipWrongType('X','X 型题') + '</div>';
+  html += '<div class="wrong-filters">'
+    + '<select class="search-box" onchange="setWrongCat(this.value)">'
+    + '<option value="all">按章节筛选：全部（'+all.length+' 题）</option>'
+    + cats.map(function(c){
+        return '<option value="'+c+'"'+(fCat===c?' selected':'')+'>'+c+'（'+catCount[c]+' 题）</option>';
+      }).join('')
+    + '</select>'
+    + '<input class="search-box" type="text" placeholder="搜索题干或卷别" value="'+fQ.replace(/"/g,'&quot;')+'"'
+    + ' oninput="setWrongQuery(this.value)" /></div>';
+  html += '<div id="wrong-list"></div></div>';
+  app.innerHTML = html;
+  refreshWrongList();
+}
+function chipWrongType(v,t){
+  return '<button class="filter-chip '+((S.wrongType||'all')===v?'active':'')+'" onclick="setWrongType(\''+v+'\')">'+t+'</button>';
+}
+// 筛选逻辑集中一处，列表与计数共用
+function filteredWrong(){
+  var fType = S.wrongType || 'all', fCat = S.wrongCat || 'all', fQ = S.wrongQ || '';
+  return getWrong().filter(function(idx){
+    var q = BANK[idx];
+    if(!q) return false;
+    if(fType !== 'all' && q.type !== fType) return false;
+    if(fCat  !== 'all' && (q.cat||'未分类') !== fCat) return false;
+    if(fQ && (q.s + q.paper + (q.cat||'')).indexOf(fQ) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return getWeight(b)-getWeight(a); });
+}
+// 只刷新列表，避免搜索框在输入时失去焦点
+function refreshWrongList(){
+  var el = document.getElementById('wrong-list'); if(!el) return;
+  var w = filteredWrong(), total = getWrong().length;
+  var h = '<p style="color:var(--sub);font-size:13px;margin:12px 0 10px">筛选结果：<b>'+w.length+'</b> 题'
+        + (w.length!==total ? '（共 '+total+' 题）' : '') + '</p>'
+        + '<div class="spaced" style="margin-bottom:14px">'
+        + '<button class="btn btn-primary" onclick="practiceFilteredWrong()">重做筛选结果（'+w.length+' 题）</button>'
+        + (w.length!==total ? '<button class="btn btn-ghost" onclick="clearWrongFilter()">清除筛选</button>' : '')
+        + '</div>';
+  if(w.length === 0){
+    h += '<p style="color:var(--sub)">当前筛选条件下没有错题。</p>';
   } else {
-    for(var i=0;i<w.length;i++){
-      var q=BANK[w[i]];
-      var wt=getWeight(w[i]);
+    for(var j=0;j<w.length;j++){
+      var q = BANK[w[j]], wt = getWeight(w[j]);
       var lvl = wt>=4 ? '🔴 高频错' : (wt>=2 ? '🟠 常错' : '🟡 偶错');
-      html += '<div class="wrong-item"><span class="q-tag '+(q.multi?'multi':'sel')+'">'+qtag(q)+'</span>'+
-        '<span class="w-stem">'+q.s+'</span>'+
-        '<span class="w-level">'+lvl+'</span>'+
-        '<button class="btn btn-ghost btn-mini" onclick="practiceOne('+w[i]+')">重做这道</button></div>';
+      h += '<div class="wrong-item"><span class="q-tag '+(q.multi?'multi':'sel')+'">'+qtag(q)+'</span>'
+        + '<span class="w-stem">'+q.s+'</span>'
+        + '<span class="w-meta">'+(q.cat||'')+'</span>'
+        + '<span class="w-level">'+lvl+'</span>'
+        + '<button class="btn btn-ghost btn-mini" onclick="practiceOne('+w[j]+')">重做这道</button></div>';
     }
   }
-  html += '</div>';
-  app.innerHTML = html;
+  el.innerHTML = h;
 }
+function setWrongType(v){ S.wrongType = v; renderWrong(); }
+function setWrongCat(v){ S.wrongCat = v; renderWrong(); }
+function setWrongQuery(v){ S.wrongQ = v; refreshWrongList(); }
+function clearWrongFilter(){ S.wrongType='all'; S.wrongCat='all'; S.wrongQ=''; renderWrong(); }
+function practiceFilteredWrong(){ practiceList(filteredWrong()); }
 
 // ========== 分类练习 ==========
 function renderTopic(){
@@ -800,6 +964,70 @@ function renderSimilarList(q){
   el.innerHTML = out || '<div class="card"><p>无匹配。</p></div>';
 }
 
+// ========== 学习统计 ==========
+function sItem(n,l){ return '<div class="s-item"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
+function renderStats(){
+  var stats = LS.get('stats',{total:0,correct:0});
+  var daily = LS.get('daily',{});
+  var chstats = LS.get('chstats',{});
+  var doneN = getDone().length, wrongN = getWrong().length;
+  var rate = stats.total>0 ? (stats.correct/stats.total*100).toFixed(1)+'%' : '--';
+
+  var h = topbar('stats');
+  h += '<div class="card"><h2>学习总览</h2><div class="stats-grid">'
+    + sItem(stats.total,'累计做题') + sItem(rate,'正确率')
+    + sItem(doneN,'已做过') + sItem(Math.max(0,TOTAL-doneN),'未做过')
+    + sItem(getRounds(),'已完成轮次') + sItem(wrongN,'错题本')
+    + '</div>'
+    + '<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:'
+    + (TOTAL>0?doneN/TOTAL*100:0)+'%"></div></div>'
+    + '<div class="prog-label">全库进度 <b>'+doneN+'</b> / '+TOTAL+' 题</div></div></div>';
+
+  // 近 7 天
+  var days=[], now=new Date();
+  for(var i=6;i>=0;i--){
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate()-i);
+    var k = ymd(d);
+    days.push({label:(d.getMonth()+1)+'/'+d.getDate(), v:daily[k]||{t:0,c:0}});
+  }
+  var maxT = 1;
+  for(var a=0;a<days.length;a++){ if(days[a].v.t > maxT) maxT = days[a].v.t; }
+  h += '<div class="card"><h2>近 7 天做题量</h2><div class="st-trend">';
+  for(var j=0;j<days.length;j++){
+    var dd=days[j], pct = dd.v.t ? Math.max(6, Math.round(dd.v.t/maxT*100)) : 0;
+    h += '<div class="st-day"><div class="st-day-val">'+(dd.v.t?dd.v.t:'')+'</div>'
+      + '<div class="st-bar'+(dd.v.t?'':' empty')+'" style="height:'+(dd.v.t?pct:2)+'%"></div>'
+      + '<div class="st-day-label">'+dd.label+'</div></div>';
+  }
+  h += '</div>';
+  var wt=0, wc=0;
+  for(var b2=0;b2<days.length;b2++){ wt+=days[b2].v.t; wc+=days[b2].v.c; }
+  h += '<p style="color:var(--sub);font-size:13px;text-align:center;margin-top:6px">近 7 天共 '
+    + wt + ' 题' + (wt ? '，正确率 '+Math.round(wc/wt*100)+'%' : '') + '</p></div>';
+
+  // 章节掌握度：正确率升序，最该补的排最前
+  var rows=[];
+  for(var c in chstats){ if(chstats[c].t>0) rows.push({c:c, t:chstats[c].t, k:chstats[c].c}); }
+  rows.sort(function(x,y){ return (x.k/x.t) - (y.k/y.t); });
+  h += '<div class="card"><h2>章节掌握度 <span style="color:var(--sub);font-size:13px">共 '
+    + rows.length + ' 章有记录 · 按正确率由低到高排</span></h2>';
+  if(!rows.length){
+    h += '<p style="color:var(--sub);line-height:1.8">还没有章节数据。做几道题就会自动统计，'
+       + '用来定位该补哪一章。</p>';
+  } else {
+    for(var m=0;m<rows.length;m++){
+      var r=rows[m], pct2=Math.round(r.k/r.t*100);
+      var col = pct2>=60 ? 'var(--correct)' : (pct2>=40 ? 'var(--warn)' : 'var(--wrong)');
+      h += '<div class="ch-row"><div class="ch-top"><span class="ch-name">'+(pct2<60?'⚠ ':'')+r.c+'</span>'
+        + '<span class="ch-val">'+r.k+'/'+r.t+' · '+pct2+'%</span></div>'
+        + '<div class="ch-bar"><div class="ch-fill" style="width:'+pct2+'%;background:'+col+'"></div></div></div>';
+    }
+  }
+  h += '</div>';
+  h += footerHTML();
+  app.innerHTML = h;
+}
+
 // ========== 复习资料（考点手册）==========
 function renderNotes(){
   var total=0; for(var n=0;n<NOTES.length;n++){ total+=NOTES[n].n; }
@@ -828,7 +1056,8 @@ function toggleLec(id){
 
 // ========== 模拟考试 ==========
 // 成考专升本《医学综合》真实卷型：A 型题 84 + B 型题 24 + X 型题 12 = 120 题 / 150 分钟
-var EXAM = { a:84, b:24, x:12, minutes:150, timer:null, deadline:0, qlist:[], idx:0, answers:{}, finished:false };
+var EXAM = { a:84, b:24, x:12, minutes:150, timer:null, deadline:0, qlist:[], idx:0, answers:{}, finished:false,
+             marked:{}, cardOpen:false };
 var EXAM_TNAME = { A:'A 型题（五选一）', B:'B 型题（配伍）', X:'X 型题（多选）' };
 
 function renderExam(){
@@ -871,7 +1100,7 @@ function startPaper(name){
   for(var i=0;i<BANK.length;i++){ if(BANK[i].paper===name) ids.push(i); }
   if(!ids.length){ alert('未找到该套卷的题目。'); return; }
   ids.sort(function(x,y){ return BANK[x].n - BANK[y].n; });
-  EXAM.qlist=ids; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false;
+  EXAM.qlist=ids; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false; EXAM.marked={}; EXAM.cardOpen=false;
   EXAM.minutes = Math.max(30, Math.round(ids.length*1.25));
   startExamTimer();
   S.page='exam'; render();
@@ -893,7 +1122,7 @@ function startExam(){
   qlist = qlist.concat(pickBGroups(pbOrder, pbMap, EXAM.b));
   qlist = qlist.concat(pick(px, EXAM.x));
   if(!qlist.length){ alert('题量设置为 0，请先拖动滑块设置题目数量。'); return; }
-  EXAM.qlist=qlist; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false;
+  EXAM.qlist=qlist; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false; EXAM.marked={}; EXAM.cardOpen=false;
   startExamTimer();
   S.page='exam';
   render();
@@ -930,12 +1159,20 @@ function examTick(){
 function examQuiz(){
   var q = BANK[EXAM.qlist[EXAM.idx]];
   var tot = EXAM.qlist.length;
-  var h = '<div class="exam-timer" id="exam-timer">--:--</div>';
+  var curMarked = !!EXAM.marked[EXAM.qlist[EXAM.idx]];
+  var h = '<div class="exam-top">'
+    + '<div class="exam-timer" id="exam-timer">--:--</div>'
+    + '<div class="exam-tools">'
+    + '<button class="btn btn-ghost btn-mini" onclick="examToggleCard()">答题卡 '+(EXAM.cardOpen?'▲':'▼')+'</button>'
+    + '<button class="btn '+(curMarked?'btn-primary':'btn-ghost')+' btn-mini" onclick="examMark()">'+(curMarked?'已标记':'标记本题')+'</button>'
+    + '</div></div>';
+  if(EXAM.cardOpen) h += examCard();
   h += '<div class="q-card"><div><span class="q-tag '+(q.multi?'multi':'sel')+'">'+qtag(q)+'</span>'+
     '<span class="q-meta">'+q.paper+' 第'+q.n+'题 · '+(EXAM.idx+1)+' / '+tot+'</span></div>'+
     '<div class="q-stem">'+q.s+'</div>'+
     figHTML(q)+
     (q.shared ? '<div style="font-size:12px;color:var(--muted);background:var(--bg);padding:8px 10px;border-radius:8px;margin:10px 0">配伍题 · 本组共用备选答案（'+q.grp+'）</div>' : '')+
+    siblingHTML(q)+
     (q.flag ? '<div style="font-size:12px;color:var(--warn);background:var(--bg);padding:8px 10px;border-radius:8px;margin:0 0 10px">'+q.flag+'</div>' : '')+
     '<div class="options">';
   var chosen = EXAM.answers[EXAM.qlist[EXAM.idx]] || [];
@@ -949,6 +1186,31 @@ function examQuiz(){
                         : '<button class="btn btn-primary" onclick="submitExam(false)">交卷</button>';
   h += '</div></div>';
   return topbar('exam') + h;
+}
+// ===== 答题卡：一眼看清已答/未答/标记，可跳转 =====
+function examCard(){
+  var tot = EXAM.qlist.length, ans = 0, mk = 0, cells = '';
+  for(var i=0;i<tot;i++){
+    var id = EXAM.qlist[i];
+    var done = (EXAM.answers[id]||[]).length > 0;
+    if(done) ans++;
+    var marked = !!EXAM.marked[id];
+    if(marked) mk++;
+    cells += '<button class="card-cell'+(done?' done':'')+(marked?' marked':'')+(i===EXAM.idx?' cellcur':'')
+           + '" onclick="examJump('+i+')">'+(i+1)+'</button>';
+  }
+  return '<div class="anscard"><div class="anscard-head">答题卡'
+    + '<span class="ac-stat">已答 '+ans+' · 未答 '+(tot-ans)+' · 标记 '+mk+'</span>'
+    + '<span class="sp" style="flex:1"></span>'
+    + '<button class="btn btn-ghost btn-mini" onclick="examToggleCard()">收起</button></div>'
+    + '<div class="ac-grid">'+cells+'</div></div>';
+}
+function examToggleCard(){ EXAM.cardOpen = !EXAM.cardOpen; render(); }
+function examJump(i){ EXAM.idx = i; EXAM.cardOpen = false; render(); }
+function examMark(){
+  var id = EXAM.qlist[EXAM.idx];
+  if(EXAM.marked[id]) delete EXAM.marked[id]; else EXAM.marked[id] = 1;
+  render();
 }
 function examPick(k){
   var id=EXAM.qlist[EXAM.idx]; var arr=EXAM.answers[id]||[];
@@ -972,6 +1234,7 @@ function submitExam(auto){
     var q=BANK[EXAM.qlist[i]], ans=EXAM.answers[EXAM.qlist[i]]||[];
     var ok = ans.length>0 && ans.slice().sort().join('')===q.a.split('').sort().join('');
     stats.total++; if(ok) stats.correct++;
+    bumpDaily(ok); bumpCat(q, ok);
     if(ans.length>0 && done.indexOf(EXAM.qlist[i])<0) done.push(EXAM.qlist[i]);
     if(!ok && wrong.indexOf(EXAM.qlist[i])<0) wrong.push(EXAM.qlist[i]);
   }
@@ -981,10 +1244,14 @@ function submitExam(auto){
 function examReport(){
   var tot=EXAM.qlist.length, cor=0, wrongList=[];
   var byType={A:{c:0,n:0},B:{c:0,n:0},X:{c:0,n:0}};
+  var chMap={}, chOrder=[];
   for(var i=0;i<tot;i++){
     var q=BANK[EXAM.qlist[i]], ans=EXAM.answers[EXAM.qlist[i]]||[];
     var ok = ans.length>0 && ans.slice().sort().join('')===q.a.split('').sort().join('');
     if(byType[q.type]){ byType[q.type].n++; if(ok) byType[q.type].c++; }
+    var cat = q.cat || '未分类';
+    if(!chMap[cat]){ chMap[cat] = {n:0, c:0}; chOrder.push(cat); }
+    chMap[cat].n++; if(ok) chMap[cat].c++;
     if(ok) cor++; else wrongList.push(EXAM.qlist[i]);
   }
   var rate = tot ? cor/tot : 0;
@@ -1000,6 +1267,23 @@ function examReport(){
     '<div class="spaced" style="justify-content:center;margin-top:12px"><button class="btn btn-primary" onclick="examRestart()">再考一次</button>'+
     '<button class="btn btn-ghost" onclick="goTab(\'wrong\')">看错题本 →</button>'+
     '<button class="btn btn-ghost" onclick="goTab(\'home\')">返回首页</button></div></div>';
+
+  // 章节得分分析：按正确率升序，最该补的排最前
+  chOrder.sort(function(a,b){ return (chMap[a].c/chMap[a].n) - (chMap[b].c/chMap[b].n); });
+  h += '<div class="card" style="margin-top:16px"><h2>章节得分分析</h2>'+
+    '<p style="color:var(--muted);font-size:12px;margin:0 0 10px">按正确率由低到高排——排在最前面的就是最该回头补的章节。'
+    + '正确率低于 60% 的会额外标出，样本只有 1 题的章节参考价值有限。</p>';
+  for(var ci=0;ci<chOrder.length;ci++){
+    var cat2=chOrder[ci], st=chMap[cat2];
+    var r = st.n ? st.c/st.n : 0;
+    var pct = Math.round(r*100);
+    var col = r>=0.6 ? 'var(--correct)' : (r>=0.4 ? 'var(--warn)' : 'var(--wrong)');
+    h += '<div class="ch-row"><div class="ch-top">'+
+      '<span class="ch-name">'+(r<0.6?'⚠ ':'')+cat2+'</span>'+
+      '<span class="ch-val">'+st.c+'/'+st.n+' · '+pct+'%</span></div>'+
+      '<div class="ch-bar"><div class="ch-fill" style="width:'+pct+'%;background:'+col+'"></div></div></div>';
+  }
+  h += '</div>';
   if(wrongList.length){
     h += '<div class="card" style="margin-top:16px"><h2>本次错题回顾</h2>';
     for(var w=0;w<wrongList.length;w++){
@@ -1021,7 +1305,7 @@ function examReport(){
   }
   return topbar('exam') + h;
 }
-function examRestart(){ EXAM.qlist=[]; EXAM.finished=false; render(); }
+function examRestart(){ EXAM.qlist=[]; EXAM.finished=false; EXAM.marked={}; EXAM.cardOpen=false; render(); }
 
 // ========== 系统数据设置 ==========
 function renderSetting(){
@@ -1052,7 +1336,9 @@ function weakSetDays(d){ var w=LS.get('weak_review',{on:false,days:1,last:0}); w
 function exportData(){
   var data={ v:VERSION, total:TOTAL, exportAt:Date.now(),
     stats:LS.get('stats',{}), wrong:LS.get('wrong',[]), done:LS.get('done',[]),
-    rounds:LS.get('rounds',0), weights:LS.get('weights',{}), weak_review:LS.get('weak_review',{on:false,days:1,last:0}) };
+    rounds:LS.get('rounds',0), weights:LS.get('weights',{}),
+    daily:LS.get('daily',{}), chstats:LS.get('chstats',{}),
+    weak_review:LS.get('weak_review',{on:false,days:1,last:0}) };
   var blob = new Blob([JSON.stringify(data)], {type:'application/json'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a'); a.href=url; a.download='医学综合复习进度_'+new Date().toISOString().slice(0,10)+'.json';
@@ -1105,6 +1391,8 @@ function importData(input){
       if(dn) LS.set('done', dn);
       if(d.rounds!=null) LS.set('rounds', d.rounds);
       if(wt) LS.set('weights', wt);
+      if(d.daily && typeof d.daily==='object') LS.set('daily', d.daily);
+      if(d.chstats && typeof d.chstats==='object') LS.set('chstats', d.chstats);
       if(d.weak_review) LS.set('weak_review', Object.assign({on:false,days:1,last:0}, d.weak_review));
       alert('导入完成。' + (dropped>0 ? '\n已丢弃 ' + dropped + ' 条不属于本题库的记录。' : ''));
       render();
