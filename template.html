@@ -290,6 +290,17 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 .wrong-filters input.search-box { flex:2; min-width:210px; }
 @media (max-width:720px){ .wrong-item .w-meta { display:none; } }
 
+/* 页内对话框 */
+#dlg { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:120; display:flex;
+  align-items:center; justify-content:center; padding:16px; }
+.dlg-box { background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  max-width:540px; width:100%; max-height:82vh; overflow-y:auto; padding:20px 22px;
+  box-shadow:0 12px 40px rgba(0,0,0,.35); }
+.dlg-title { font-size:17px; font-weight:600; margin-bottom:12px; }
+.dlg-body { font-size:14px; line-height:1.85; color:var(--sub); }
+.dlg-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+.dlg-actions .btn { min-width:96px; }
+
 /* 清空成功提示条 */
 .reset-banner { background:rgba(63,185,80,.10); border:1px solid var(--correct); color:var(--correct);
   border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13.5px; line-height:1.7; }
@@ -376,7 +387,7 @@ var CHEAT = __CHEAT__;
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.8';
+var VERSION = 'v1.9';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -477,6 +488,39 @@ function figHTML(q){
     (F.cap ? '<div class="q-fig-cap">'+F.cap+' · 点击图片放大</div>' : '<div class="q-fig-cap">点击图片放大</div>')+
     '</div>';
 }
+// ===== 页内对话框 =====
+// 浏览器可能屏蔽原生 alert/confirm：桌面端在反复弹出后常被勾选
+// 「阻止此页面创建更多对话框」，部分环境（或移动端 webview）也不支持。
+// 被屏蔽时 confirm() 会直接返回 false —— 表现就是「点了没反应、什么也没发生」。
+// 因此全部改用页内对话框，不依赖浏览器能力。
+var DLG_CB = null;
+function escHtml(x){
+  return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function closeDlg(){
+  var d = document.getElementById('dlg');
+  if(d && d.parentNode) d.parentNode.removeChild(d);
+  DLG_CB = null;
+}
+function appDialog(title, msg, okText, danger, cb){
+  DLG_CB = cb || null;
+  var d = document.createElement('div'); d.id = 'dlg';
+  var btns = okText
+    ? '<button class="btn btn-ghost" id="dlg-cancel">取消</button>'
+      + '<button class="btn '+(danger?'btn-danger':'btn-primary')+'" id="dlg-ok">'+escHtml(okText)+'</button>'
+    : '<button class="btn btn-primary" id="dlg-ok">知道了</button>';
+  d.innerHTML = '<div class="dlg-box"><div class="dlg-title">'+escHtml(title)+'</div>'
+    + '<div class="dlg-body">'+escHtml(msg).replace(/\n/g,'<br>')+'</div>'
+    + '<div class="dlg-actions">'+btns+'</div></div>';
+  document.body.appendChild(d);
+  var okb = document.getElementById('dlg-ok');
+  if(okb) okb.onclick = function(){ var f = DLG_CB; closeDlg(); if(f) f(); };
+  var cb2 = document.getElementById('dlg-cancel');
+  if(cb2) cb2.onclick = closeDlg;
+}
+function appAlert(msg){ appDialog('提示', msg, null, false, null); }
+function appConfirm(title, msg, okText, danger, cb){ appDialog(title, msg, okText||'确定', danger, cb); }
+
 // ===== 配伍题的同组小题 =====
 // 真实卷面上同一组的小题是并排给出的，刷题时也一并显示，便于对照共用选项作答。
 function siblings(q){
@@ -654,7 +698,7 @@ function pickNext(){
 function practiceList(list){
   S.mode='custom'; S.custom=(list||[]).slice();
   S.page='quiz'; S.history=[]; S.answered=false; S.multi_sel={}; S.skipQid=null;
-  if(!S.custom.length){ alert('这一组没有题目。'); return; }
+  if(!S.custom.length){ appAlert('这一组没有题目。'); return; }
   pickNext();
 }
 // 跳过本题：不计入答题记录、不影响权重，只是换一题
@@ -1127,7 +1171,7 @@ function startExamTimer(){
 function startPaper(name){
   var ids=[];
   for(var i=0;i<BANK.length;i++){ if(BANK[i].paper===name) ids.push(i); }
-  if(!ids.length){ alert('未找到该套卷的题目。'); return; }
+  if(!ids.length){ appAlert('未找到该套卷的题目。'); return; }
   ids.sort(function(x,y){ return BANK[x].n - BANK[y].n; });
   EXAM.qlist=ids; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false; EXAM.marked={}; EXAM.cardOpen=false;
   EXAM.minutes = Math.max(30, Math.round(ids.length*1.25));
@@ -1150,7 +1194,7 @@ function startExam(){
   var qlist = pick(pa, EXAM.a);
   qlist = qlist.concat(pickBGroups(pbOrder, pbMap, EXAM.b));
   qlist = qlist.concat(pick(px, EXAM.x));
-  if(!qlist.length){ alert('题量设置为 0，请先拖动滑块设置题目数量。'); return; }
+  if(!qlist.length){ appAlert('题量设置为 0，请先拖动滑块设置题目数量。'); return; }
   EXAM.qlist=qlist; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false; EXAM.marked={}; EXAM.cardOpen=false;
   startExamTimer();
   S.page='exam';
@@ -1252,9 +1296,15 @@ function examNext(){ if(EXAM.idx<EXAM.qlist.length-1) EXAM.idx++; render(); }
 function examPrev(){ if(EXAM.idx>0) EXAM.idx--; render(); }
 function submitExam(auto){
   if(!auto){
-    if(!confirm('确定要交卷吗？共 '+EXAM.qlist.length+' 题。交卷后错题会记入错题本与答题统计。')) return;
+    appConfirm('交卷确认',
+      '确定要交卷吗？共 '+EXAM.qlist.length+' 题。\n\n交卷后错题会记入错题本与答题统计。',
+      '交卷', false, function(){ finishExam(); });
+    return;
   }
-  if(EXAM.timer) clearInterval(EXAM.timer);
+  finishExam();
+}
+function finishExam(){
+  if(EXAM.timer){ clearInterval(EXAM.timer); EXAM.timer=null; }
   EXAM.finished = true;
   var wrong=getWrong();
   var stats=LS.get('stats',{total:0,correct:0});
@@ -1362,6 +1412,18 @@ function renderSetting(){
 }
 function setWeakOn(v){ var w=LS.get('weak_review',{on:false,days:1,last:0}); w.on=v; LS.set('weak_review',w); }
 function weakSetDays(d){ var w=LS.get('weak_review',{on:false,days:1,last:0}); w.days=d; LS.set('weak_review',w); document.getElementById('rv-d').textContent=d; }
+function applyImport(d, w, dn, wt, dropped){
+  if(d.stats) LS.set('stats', d.stats);
+  if(w) LS.set('wrong', w);
+  if(dn) LS.set('done', dn);
+  if(d.rounds!=null) LS.set('rounds', d.rounds);
+  if(wt) LS.set('weights', wt);
+  if(d.daily && typeof d.daily==='object') LS.set('daily', d.daily);
+  if(d.chstats && typeof d.chstats==='object') LS.set('chstats', d.chstats);
+  if(d.weak_review) LS.set('weak_review', Object.assign({on:false,days:1,last:0}, d.weak_review));
+  appAlert('导入完成。' + (dropped>0 ? '\n已丢弃 ' + dropped + ' 条不属于本题库的记录。' : ''));
+  render();
+}
 function exportData(){
   var data={ v:VERSION, total:TOTAL, exportAt:Date.now(),
     stats:LS.get('stats',{}), wrong:LS.get('wrong',[]), done:LS.get('done',[]),
@@ -1414,18 +1476,10 @@ function importData(input){
         msg += '\n\n⚠ 有 ' + dropped + ' 条记录不属于当前题库（共 ' + TOTAL + ' 题），将被丢弃。';
       }
       msg += '\n\n导入会覆盖当前进度，确定继续吗？';
-      if(!confirm(msg)) return;
-      if(d.stats) LS.set('stats', d.stats);
-      if(w) LS.set('wrong', w);
-      if(dn) LS.set('done', dn);
-      if(d.rounds!=null) LS.set('rounds', d.rounds);
-      if(wt) LS.set('weights', wt);
-      if(d.daily && typeof d.daily==='object') LS.set('daily', d.daily);
-      if(d.chstats && typeof d.chstats==='object') LS.set('chstats', d.chstats);
-      if(d.weak_review) LS.set('weak_review', Object.assign({on:false,days:1,last:0}, d.weak_review));
-      alert('导入完成。' + (dropped>0 ? '\n已丢弃 ' + dropped + ' 条不属于本题库的记录。' : ''));
-      render();
-    }catch(err){ alert('导入失败：文件格式不正确。'); }
+      appConfirm('导入学习进度', msg, '确定导入', false, function(){
+            applyImport(d, w, dn, wt, dropped);
+          });
+    }catch(err){ appAlert('导入失败：文件格式不正确。'); }
   };
   reader.readAsText(input.files[0]);
 }
@@ -1462,7 +1516,7 @@ function filterKn(v){
 // ========== 通用 ==========
 function goHome(){ S.page='home'; render(); }
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){ closeLightbox(); return; }
+  if(e.key==='Escape'){ closeLightbox(); closeDlg(); return; }
   if(S.page!=='quiz') return;
   if(e.code==='Space'){ e.preventDefault(); if(S.answered) pickNext(); }
 });
@@ -1482,7 +1536,7 @@ function resetAll(){
     if(k.indexOf('med_')===0) keys.push(k);
   }
   if(!keys.length){
-    alert('当前本来就没有学习数据，无需清空。');
+    appAlert('当前本来就没有学习数据，无需清空。');
     return;
   }
 
@@ -1497,15 +1551,17 @@ function resetAll(){
     + '· 章节掌握度：' + nCat + ' 章\n\n'
     + '共 ' + keys.length + ' 项存储记录将被删除。\n\n'
     + '建议先「导出进度」做个备份。要继续吗？';
-  if(!confirm(detail)) return;
+  appConfirm('清空所有学习数据', detail, '继续', true, function(){
+    var again = '点击「确认清空」后，' + st.total + ' 题的学习记录会立即清空，无法找回。\n\n'
+      + '还没备份的话，请先取消，去「系统数据设置」导出进度。';
+    appConfirm('第二次确认（共需确认两次）', again, '确认清空', true, function(){
+      doReset(keys, st, nWrong, nDone, rounds);
+    });
+  });
+}
 
-  // 第二次确认：明确这是最后一次机会
-  var again = '⚠️ 第二次确认（共需确认两次）\n\n'
-    + '点击「确定」后，' + st.total + ' 题的学习记录会立即清空，无法找回。\n\n'
-    + '还没备份的话，请先点「取消」去导出。\n\n'
-    + '真的要继续吗？';
-  if(!confirm(again)) return;
-
+// 实际的清空动作（两次确认都通过后才执行）
+function doReset(keys, st, nWrong, nDone, rounds){
   for(var j=0;j<keys.length;j++) localStorage.removeItem(keys[j]);
 
   // 同时清掉内存里的状态：否则刚清完，页面里还残留旧的答题记录、筛选条件、考试进度
@@ -1521,7 +1577,7 @@ function resetAll(){
   S.resetJustNow = true;
   S.page='home'; render();
 
-  alert('✅ 已清空全部学习数据\n\n'
+  appAlert('已清空全部学习数据\n\n'
     + '清除 ' + keys.length + ' 项记录：累计答题 ' + st.total + ' 题、错题本 ' + nWrong
     + ' 题、已做记录 ' + nDone + ' 题、轮次 ' + rounds + ' 轮。\n\n'
     + '进度已归零，可以重新开始。');
