@@ -290,6 +290,10 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 .wrong-filters input.search-box { flex:2; min-width:210px; }
 @media (max-width:720px){ .wrong-item .w-meta { display:none; } }
 
+/* 清空成功提示条 */
+.reset-banner { background:rgba(63,185,80,.10); border:1px solid var(--correct); color:var(--correct);
+  border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13.5px; line-height:1.7; }
+
 /* 学习统计 */
 .st-trend { display:flex; align-items:flex-end; gap:6px; height:120px; margin:14px 0 6px; }
 .st-day { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end; }
@@ -372,7 +376,7 @@ var CHEAT = {"tip": "① 单选题（A/B 型）：答案落点分布 A 264 题(2
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.7';
+var VERSION = 'v1.8';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -388,6 +392,7 @@ var LS = {
 
 // ========== 全局状态 ==========
 var S = { page:'home', mode:'all', qid:null, history:[], answered:false, theme:LS.get('theme','light'),
+          resetJustNow:false, resetInfo:null,
           multi_sel:{}, // 多选题已勾选集合
           simFilter:'all', topic:null, skipQid:null, wrongType:'all', wrongCat:'all', wrongQ:'' };
 
@@ -555,7 +560,16 @@ function renderHome(){
   var rate = stats.total>0 ? (stats.correct/stats.total*100).toFixed(1) : '--';
   var doneCount = getDone().length;
   var undone = Math.max(0, TOTAL - doneCount);
-  app.innerHTML = topbar('home') +
+  // 清空数据后给一次明确的成功提示（只显示一次，之后自动消失）
+  var resetBanner = '';
+  if(S.resetJustNow && S.resetInfo){
+    var ri = S.resetInfo;
+    resetBanner = '<div class="reset-banner">✅ 学习数据已全部清空：共 '+ri.keys+' 项记录删除'
+      + '（累计答题 '+ri.total+' 题、错题本 '+ri.wrong+' 题、已做记录 '+ri.done+' 题、轮次 '+ri.rounds+' 轮）。'
+      + '进度已归零。</div>';
+    S.resetJustNow = false;
+  }
+  app.innerHTML = topbar('home') + resetBanner +
   '<div class="home-hero"><h1>成人高考专升本 · 医学综合</h1>'+
     '<div class="sub">'+TOTAL+' 道题 · A型 '+A_COUNT+' + B型配伍 '+B_COUNT+' + X型多选 '+MULTI_COUNT+' · 7 套真题 + 4 套模拟 · 间隔重复 · 内置解析 · 相似题对比 '+SIMILAR_COUNT+' 组</div></div>'+
   '<div class="stats-grid">'+
@@ -1454,11 +1468,63 @@ document.addEventListener('keydown',function(e){
 });
 function toggleTheme(){ S.theme=S.theme==='light'?'dark':'light'; LS.set('theme',S.theme); render(); }
 function resetAll(){
-  if(!confirm('确定要清空所有学习数据吗？此操作不可恢复。')) return;
-  if(!confirm('⚠️ 最后确认：继续将清空全部历史学习进度（答题统计、错题本、已完成轮数、权重、弱项设置等），且无法恢复。确定继续吗？')) return;
-  var keys=[]; for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k.indexOf('med_')===0) keys.push(k); }
+  var st = LS.get('stats', {total:0, correct:0});
+  var nWrong = LS.get('wrong',[]).length;
+  var nDone  = LS.get('done',[]).length;
+  var rounds = LS.get('rounds', 0);
+  var nWt    = Object.keys(LS.get('weights',{})).length;
+  var nDaily = Object.keys(LS.get('daily',{})).length;
+  var nCat   = Object.keys(LS.get('chstats',{})).length;
+
+  var keys = [];
+  for(var i=0;i<localStorage.length;i++){
+    var k = localStorage.key(i);
+    if(k.indexOf('med_')===0) keys.push(k);
+  }
+  if(!keys.length){
+    alert('当前本来就没有学习数据，无需清空。');
+    return;
+  }
+
+  // 第一次确认：把「将失去什么」逐项列清楚，而不是一句笼统的警告
+  var detail = '确定要清空全部学习数据吗？（此操作不可恢复）\n\n将清除的内容：\n'
+    + '· 答题统计：累计 ' + st.total + ' 题（答对 ' + st.correct + ' 题）\n'
+    + '· 错题本：' + nWrong + ' 题\n'
+    + '· 已做记录：' + nDone + ' 题\n'
+    + '· 已完成轮次：' + rounds + ' 轮\n'
+    + '· 题目权重：' + nWt + ' 项\n'
+    + '· 按日统计：' + nDaily + ' 天\n'
+    + '· 章节掌握度：' + nCat + ' 章\n\n'
+    + '共 ' + keys.length + ' 项存储记录将被删除。\n\n'
+    + '建议先「导出进度」做个备份。要继续吗？';
+  if(!confirm(detail)) return;
+
+  // 第二次确认：明确这是最后一次机会
+  var again = '⚠️ 第二次确认（共需确认两次）\n\n'
+    + '点击「确定」后，' + st.total + ' 题的学习记录会立即清空，无法找回。\n\n'
+    + '还没备份的话，请先点「取消」去导出。\n\n'
+    + '真的要继续吗？';
+  if(!confirm(again)) return;
+
   for(var j=0;j<keys.length;j++) localStorage.removeItem(keys[j]);
+
+  // 同时清掉内存里的状态：否则刚清完，页面里还残留旧的答题记录、筛选条件、考试进度
+  S.history=[]; S.qid=null; S.answered=false; S.multi_sel={}; S.skipQid=null;
+  S.wrongType='all'; S.wrongCat='all'; S.wrongQ=''; S.custom=[];
+  S.weakFirst=null; S.topic=null; S.simFilter='all';
+  EXAM.qlist=[]; EXAM.idx=0; EXAM.answers={}; EXAM.finished=false;
+  EXAM.marked={}; EXAM.cardOpen=false;
+  if(EXAM.timer){ clearInterval(EXAM.timer); EXAM.timer=null; }
+
+  S.theme = LS.get('theme','light');
+  S.resetInfo = { keys:keys.length, total:st.total, wrong:nWrong, done:nDone, rounds:rounds };
+  S.resetJustNow = true;
   S.page='home'; render();
+
+  alert('✅ 已清空全部学习数据\n\n'
+    + '清除 ' + keys.length + ' 项记录：累计答题 ' + st.total + ' 题、错题本 ' + nWrong
+    + ' 题、已做记录 ' + nDone + ' 题、轮次 ' + rounds + ' 轮。\n\n'
+    + '进度已归零，可以重新开始。');
 }
 
 S.theme=LS.get('theme','light');
