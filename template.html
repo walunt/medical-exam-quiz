@@ -141,6 +141,9 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
   .next-hint{margin-top:12px;font-size:11px;}
 }
 /* 窄屏（手机竖屏/小窗）：整体紧凑 */
+.mobile-next{display:none;}      /* 默认（桌面）隐藏；下面的手机媒体查询里改为固定底部 */
+.mobile-exambar{display:none;}    /* 同上 */
+
 @media(max-width:760px){
   #app{padding:12px 12px 80px;}
   .topbar{padding:0 0 10px;}
@@ -172,8 +175,11 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
   /* 单列时答题后固定底部"下一题" */
   .mobile-next{display:block;position:fixed;left:10px;right:10px;bottom:10px;z-index:60;}
   .mobile-next .btn{width:100%;padding:13px;font-size:16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);}
+  /* 考试模式：固定底栏（上一题/下一题/交卷） */
+  .mobile-exambar{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:60;gap:10px;}
+  .mobile-exambar .btn{flex:1;padding:13px;font-size:16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);}
+  #app{padding-bottom:100px;}   /* 给固定底栏留空间，避免内容被遮 */
 }
-.mobile-next{display:none;}
 .q-card { background:var(--card); border-radius:var(--radius); padding:28px; box-shadow:var(--shadow); border:1px solid var(--border); }
 .q-tag { display:inline-block; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:600; margin-right:8px; }
 .q-tag.tf { background:#dbeafe; color:#1d4ed8; }
@@ -407,7 +413,7 @@ var CHEAT = __CHEAT__;
 //   注意：小数点后是「计数值」不是小数 —— v1.10 表示第 10 次修改，晚于 v1.9，
 //         不要按小数理解成 1.10 < 1.9，也不要因此擅自进整数。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.12';
+var VERSION = 'v1.13';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -1293,6 +1299,11 @@ function examQuiz(){
   h += (EXAM.idx<tot-1) ? '<button class="btn btn-primary" onclick="examNext()">下一题</button>'
                         : '<button class="btn btn-primary" onclick="submitExam(false)">交卷</button>';
   h += '</div></div>';
+  h += '<div class="mobile-exambar">'
+    + '<button class="btn btn-ghost" onclick="examPrev()">← 上一题</button>'
+    + (EXAM.idx<tot-1 ? '<button class="btn btn-primary" onclick="examNext()">下一题 →</button>'
+                      : '<button class="btn btn-danger" onclick="submitExam(false)">交卷</button>')
+    + '</div>';
   return topbar('exam') + h;
 }
 // ===== 答题卡：一眼看清已答/未答/标记，可跳转 =====
@@ -1555,6 +1566,37 @@ function filterKn(v){
     cats[i].style.display=(v && cats[i].textContent.indexOf(v)<0)?'none':'';
   }
 }
+// ===== 手机滑动手势 =====
+// 从右往左滑 = 下一题；模拟考里从左往右滑 = 上一题。
+// 只认「横向位移足够大、纵向很小、时间短」的手势，避免与上下滚动/点按误触。
+var SWIPE = { x:0, y:0, t:0 };
+function swipeBlocked(){
+  return !!document.getElementById('dlg') || !!document.getElementById('lightbox');
+}
+document.addEventListener('touchstart', function(e){
+  if(e.touches.length!==1 || swipeBlocked()) { SWIPE.t=0; return; }
+  SWIPE.x = e.touches[0].clientX; SWIPE.y = e.touches[0].clientY; SWIPE.t = Date.now();
+}, {passive:true});
+document.addEventListener('touchend', function(e){
+  if(!SWIPE.t) return;
+  var dx = e.changedTouches[0].clientX - SWIPE.x;
+  var dy = e.changedTouches[0].clientY - SWIPE.y;
+  var dt = Date.now() - SWIPE.t;
+  SWIPE.t = 0;
+  if(swipeBlocked() || dt>800) return;
+  if(Math.abs(dx) < 70 || Math.abs(dy) > 50) return;   // 不够横向、或更像上下滚动
+  if(S.page==='quiz'){
+    if(dx<0){                                          // 右→左 = 下一题
+      if(S.answered) pickNext();                       // 未作答时不响应，避免误滑跳题
+    }
+    return;
+  }
+  if(S.page==='exam'){
+    if(dx<0){ if(EXAM.idx<EXAM.qlist.length-1) examNext(); }
+    else   { examPrev(); }
+  }
+}, {passive:true});
+
 // ========== 通用 ==========
 function goHome(){ S.page='home'; render(); }
 document.addEventListener('keydown',function(e){
