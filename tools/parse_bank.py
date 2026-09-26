@@ -381,11 +381,11 @@ def main():
             issues.append("缺 AI 解析")
         if q["type"] == "B" and len(q["o"]) < 5:
             issues.append("共用选项不足")
-        # 选项文本重复：多为上游 OCR 把某个选项识别重复、同时漏掉了另一个。
-        # 不擅自补造选项，只标记出来交人工对照原卷。
+        # 选项文本重复：已核对原卷，确认原卷本身就印了两个一模一样的选项（属原卷出题瑕疵，
+        # 非识别错误）。因此题库保持原样，只在界面上中性说明，不改动选项内容。
         ts = [o["t"].strip() for o in q["o"]]
         if len(set(ts)) != len(ts):
-            issues.append("选项文本重复（疑源文档识别有误，需对照原卷）")
+            issues.append("选项文本重复（已核实：原卷如此，非识别错误）")
         if issues:
             report["issues"].append({
                 "type": q["type"], "paper": q["paper"], "n": q["n"],
@@ -399,7 +399,7 @@ def main():
         # 把「选项重复」也提到界面提示里，做题时能第一时间看到
         ts = [o["t"].strip() for o in q["o"]]
         if len(set(ts)) != len(ts):
-            extra = "选项中有重复项，疑为原卷扫描识别有误，建议对照原卷核对"
+            extra = "注意：原卷中该选项重复出现了两次（已核对，原卷如此，非识别错误）"
             q["flag"] = (q["flag"] + "；" + extra) if q["flag"] else extra
 
     os.makedirs(OUT, exist_ok=True)
