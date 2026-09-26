@@ -298,6 +298,10 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
   box-shadow:0 12px 40px rgba(0,0,0,.35); }
 .dlg-title { font-size:17px; font-weight:600; margin-bottom:12px; }
 .dlg-body { font-size:14px; line-height:1.85; color:var(--sub); }
+.dlg-tip { display:none; margin-top:12px; font-size:13px; line-height:1.7; color:var(--muted);
+  background:var(--bg); border-radius:8px; padding:9px 12px; }
+.dlg-tip.show { display:block; }
+.dlg-tip.ok { color:var(--correct); background:rgba(63,185,80,.10); }
 .dlg-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
 .dlg-actions .btn { min-width:96px; }
 
@@ -387,7 +391,7 @@ var CHEAT = __CHEAT__;
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.9';
+var VERSION = 'v1.10';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -502,24 +506,39 @@ function closeDlg(){
   if(d && d.parentNode) d.parentNode.removeChild(d);
   DLG_CB = null;
 }
-function appDialog(title, msg, okText, danger, cb){
+// extra：可选的附加操作 {label, fn} —— 点它执行动作但**不关对话框**，
+// 用于「清空前先导出备份」这类「提示了就要当场能做」的场景。
+function appDialog(title, msg, okText, danger, cb, extra){
   DLG_CB = cb || null;
   var d = document.createElement('div'); d.id = 'dlg';
-  var btns = okText
+  var extraBtn = extra ? '<button class="btn btn-ghost" id="dlg-extra">'+escHtml(extra.label)+'</button>' : '';
+  var btns = extraBtn + (okText
     ? '<button class="btn btn-ghost" id="dlg-cancel">取消</button>'
       + '<button class="btn '+(danger?'btn-danger':'btn-primary')+'" id="dlg-ok">'+escHtml(okText)+'</button>'
-    : '<button class="btn btn-primary" id="dlg-ok">知道了</button>';
+    : '<button class="btn btn-primary" id="dlg-ok">知道了</button>');
   d.innerHTML = '<div class="dlg-box"><div class="dlg-title">'+escHtml(title)+'</div>'
     + '<div class="dlg-body">'+escHtml(msg).replace(/\n/g,'<br>')+'</div>'
+    + '<div class="dlg-tip" id="dlg-tip"></div>'
     + '<div class="dlg-actions">'+btns+'</div></div>';
   document.body.appendChild(d);
   var okb = document.getElementById('dlg-ok');
   if(okb) okb.onclick = function(){ var f = DLG_CB; closeDlg(); if(f) f(); };
   var cb2 = document.getElementById('dlg-cancel');
   if(cb2) cb2.onclick = closeDlg;
+  var eb = document.getElementById('dlg-extra');
+  if(eb) eb.onclick = function(){ extra.fn(); };
 }
 function appAlert(msg){ appDialog('提示', msg, null, false, null); }
-function appConfirm(title, msg, okText, danger, cb){ appDialog(title, msg, okText||'确定', danger, cb); }
+function appConfirm(title, msg, okText, danger, cb, extra){
+  appDialog(title, msg, okText||'确定', danger, cb, extra);
+}
+// 对话框内的即时反馈（导出成功等），不打断当前确认流程
+function dlgTip(text, ok){
+  var t = document.getElementById('dlg-tip');
+  if(!t) return;
+  t.textContent = text;
+  t.className = 'dlg-tip' + (text ? (ok ? ' ok show' : ' show') : '');
+}
 
 // ===== 配伍题的同组小题 =====
 // 真实卷面上同一组的小题是并排给出的，刷题时也一并显示，便于对照共用选项作答。
@@ -1550,14 +1569,17 @@ function resetAll(){
     + '· 按日统计：' + nDaily + ' 天\n'
     + '· 章节掌握度：' + nCat + ' 章\n\n'
     + '共 ' + keys.length + ' 项存储记录将被删除。\n\n'
-    + '建议先「导出进度」做个备份。要继续吗？';
+    + '清空后无法恢复。建议先点下面的「先导出备份」存一份。';
   appConfirm('清空所有学习数据', detail, '继续', true, function(){
     var again = '点击「确认清空」后，' + st.total + ' 题的学习记录会立即清空，无法找回。\n\n'
-      + '还没备份的话，请先取消，去「系统数据设置」导出进度。';
+      + '还没备份的话，请点「取消」返回设置页导出。';
     appConfirm('第二次确认（共需确认两次）', again, '确认清空', true, function(){
       doReset(keys, st, nWrong, nDone, rounds);
     });
-  });
+  }, { label:'⬇ 先导出备份', fn:function(){
+        exportData();
+        dlgTip('备份已导出（JSON 文件已保存到下载文件夹）。现在可以放心继续，或点「取消」。', true);
+      } });
 }
 
 // 实际的清空动作（两次确认都通过后才执行）
