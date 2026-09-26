@@ -1,0 +1,7 @@
+# 临时 / 本地文件
+.DS_Store
+启动.bat
+~$*
+*.tmp
+__pycache__/
+*.pyc
