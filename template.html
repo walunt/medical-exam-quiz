@@ -309,8 +309,12 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 
 /* 配伍题同组小题 */
 .sib-box { margin-top:10px; border:1px dashed var(--border); border-radius:10px; padding:10px 12px; background:var(--bg); }
-.sib-head { font-size:12px; color:var(--muted); margin-bottom:6px; }
-.sib-item { font-size:13.5px; line-height:1.75; }
+.sib-head { font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; gap:8px; flex-wrap:wrap; }
+.sib-tip { color:var(--accent); }
+.sib-item { font-size:13.5px; line-height:1.75; padding:3px 6px; border-radius:6px; }
+.sib-link { cursor:pointer; transition:background .15s; }
+.sib-link:hover { background:var(--card); box-shadow:0 0 0 1px var(--border); }
+.sib-link:hover .sib-no { text-decoration:underline; }
 .sib-no { display:inline-block; min-width:52px; color:var(--accent); font-weight:500; margin-right:6px; }
 
 /* 模拟考答题卡 */
@@ -368,7 +372,7 @@ var CHEAT = __CHEAT__;
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.6';
+var VERSION = 'v1.7';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -481,9 +485,20 @@ function siblings(q){
 }
 function siblingHTML(q){
   var sib=siblings(q); if(!sib.length) return '';
-  var h='<div class="sib-box"><div class="sib-head">同组小题 · 与本題共用上面这组备选答案</div>';
+  // 模拟考里要在本卷内跳转（用卷内序号），刷题时直接切到该题（用题库序号）
+  var inExam = (S.page==='exam' && !EXAM.finished && EXAM.qlist.length>0);
+  var h='<div class="sib-box"><div class="sib-head">同组小题 · 与本題共用上面这组备选答案'
+      + '<span class="sib-tip">点击可切换到该题</span></div>';
   for(var i=0;i<sib.length;i++){
-    h+='<div class="sib-item"><span class="sib-no">第'+sib[i].n+'题</span><span>'+sib[i].s+'</span></div>';
+    var x=sib[i], act='';
+    if(inExam){
+      var at = EXAM.qlist.indexOf(x.id);
+      if(at>=0) act='onclick="examJump('+at+')"';
+    } else {
+      act='onclick="practiceOne('+x.id+')"';
+    }
+    h+='<div class="sib-item'+(act?' sib-link':'')+'" '+act+'>'
+      + '<span class="sib-no">第'+x.n+'题</span><span>'+x.s+'</span></div>';
   }
   return h+'</div>';
 }
