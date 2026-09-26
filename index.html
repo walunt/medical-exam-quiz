@@ -346,9 +346,23 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 .card-cell { position:relative; padding:8px 0; border-radius:7px; border:1px solid var(--border); background:var(--bg); color:var(--sub); font-size:13px; cursor:pointer; transition:all .15s; }
 .card-cell:hover { border-color:var(--accent); }
 .card-cell.done { background:var(--accent); color:#fff; border-color:var(--accent); }
-.card-cell.marked { border-color:var(--warn); }
-.card-cell.marked::after { content:'●'; position:absolute; top:-1px; right:3px; font-size:9px; color:var(--warn); }
+/* 标记待定：红色实心 + 红色外圈，在 120 格里一眼能挑出来 */
+.card-cell.marked { background:var(--wrong); color:#fff; border-color:var(--wrong);
+  box-shadow:0 0 0 2px rgba(239,68,68,.30); font-weight:700; }
+/* 已答且被标记：保留蓝色底（仍看得出已答），外面套一圈粗红环 */
+.card-cell.done.marked { background:var(--accent); border-color:#fff; box-shadow:0 0 0 3px var(--wrong); }
+.card-cell.marked::after { content:'●'; position:absolute; top:2px; right:4px; font-size:11px; line-height:1; color:#fff;
+  text-shadow:0 0 2px rgba(0,0,0,.5); }
+.card-cell.done.marked::after { color:var(--wrong); text-shadow:none; }
 .card-cell.cellcur { outline:2px solid var(--accent2); outline-offset:1px; }
+/* 答题卡图例 */
+.ac-legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--muted); }
+.ac-legend span { display:flex; align-items:center; gap:5px; }
+.ac-legend .sw { width:15px; height:15px; border-radius:4px; display:inline-block; border:1px solid var(--border); }
+.ac-legend .sw.lg-done { background:var(--accent); border-color:var(--accent); }
+.ac-legend .sw.lg-todo { background:var(--bg); }
+.ac-legend .sw.lg-mark { background:var(--wrong); border-color:var(--wrong); box-shadow:0 0 0 2px rgba(239,68,68,.30); }
+.ac-legend .sw.lg-cur  { background:var(--card); outline:2px solid var(--accent2); outline-offset:1px; }
 /* 章节得分分析 */
 .ch-row { margin:9px 0; }
 .ch-top { display:flex; justify-content:space-between; font-size:13px; gap:10px; }
@@ -393,7 +407,7 @@ var CHEAT = {"tip": "① 单选题（A/B 型）：答案落点分布 A 264 题(2
 //   注意：小数点后是「计数值」不是小数 —— v1.10 表示第 10 次修改，晚于 v1.9，
 //         不要按小数理解成 1.10 < 1.9，也不要因此擅自进整数。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.11';
+var VERSION = 'v1.12';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -1294,10 +1308,17 @@ function examCard(){
            + '" onclick="examJump('+i+')">'+(i+1)+'</button>';
   }
   return '<div class="anscard"><div class="anscard-head">答题卡'
-    + '<span class="ac-stat">已答 '+ans+' · 未答 '+(tot-ans)+' · 标记 '+mk+'</span>'
+    + '<span class="ac-stat">已答 '+ans+' · 未答 '+(tot-ans)
+    + ' · <b style="color:var(--wrong)">标记 '+mk+'</b></span>'
     + '<span class="sp" style="flex:1"></span>'
     + '<button class="btn btn-ghost btn-mini" onclick="examToggleCard()">收起</button></div>'
-    + '<div class="ac-grid">'+cells+'</div></div>';
+    + '<div class="ac-grid">'+cells+'</div>'
+    + '<div class="ac-legend">'
+    + '<span><i class="sw lg-done"></i>已答</span>'
+    + '<span><i class="sw lg-todo"></i>未答</span>'
+    + '<span><i class="sw lg-mark"></i>标记待定（红）</span>'
+    + '<span><i class="sw lg-cur"></i>当前题</span>'
+    + '</div></div>';
 }
 function examToggleCard(){ EXAM.cardOpen = !EXAM.cardOpen; render(); }
 function examJump(i){ EXAM.idx = i; EXAM.cardOpen = false; render(); }
