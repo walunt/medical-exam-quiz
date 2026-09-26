@@ -327,7 +327,7 @@ var CHEAT = __CHEAT__;
 //   大版本里程碑才进整数（如 v1 → v2），升级前须与核桃确认；
 //   小版本号＝自 v1 起累计的更改次数，每次调整 +0.1（v1.0 → v1.1 → v1.2 …）。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.4';
+var VERSION = 'v1.5';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -540,7 +540,7 @@ function renderQuiz(){
 
   var mainHTML = '<div class="q-card">'+
     '<div><span class="q-tag '+(q.multi?'multi':'sel')+'">'+qtag(q)+'</span>'+
-      '<span class="q-meta">'+q.paper+' 第'+q.n+'题 · 本轮第 '+(S.history.length+1)+' 题 · 权重 '+qWeight+'</span></div>'+
+      '<span class="q-meta">'+q.paper+' 第'+q.n+'题 · '+q.cat+' · 权重 '+qWeight+'</span></div>'+
     '<div class="q-stem">'+q.s+'</div>'+
     figHTML(q)+
     (q.shared ? '<div style="font-size:12px;color:var(--muted);background:var(--bg);padding:8px 10px;border-radius:8px;margin-top:10px">配伍题 · 本组共用备选答案（'+q.grp+'，同一选项可被同组小题各选一次）</div>' : '')+
@@ -1050,7 +1050,7 @@ function renderSetting(){
 function setWeakOn(v){ var w=LS.get('weak_review',{on:false,days:1,last:0}); w.on=v; LS.set('weak_review',w); }
 function weakSetDays(d){ var w=LS.get('weak_review',{on:false,days:1,last:0}); w.days=d; LS.set('weak_review',w); document.getElementById('rv-d').textContent=d; }
 function exportData(){
-  var data={ v:VERSION, exportAt:Date.now(),
+  var data={ v:VERSION, total:TOTAL, exportAt:Date.now(),
     stats:LS.get('stats',{}), wrong:LS.get('wrong',[]), done:LS.get('done',[]),
     rounds:LS.get('rounds',0), weights:LS.get('weights',{}), weak_review:LS.get('weak_review',{on:false,days:1,last:0}) };
   var blob = new Blob([JSON.stringify(data)], {type:'application/json'});
@@ -1058,19 +1058,56 @@ function exportData(){
   var a = document.createElement('a'); a.href=url; a.download='医学综合复习进度_'+new Date().toISOString().slice(0,10)+'.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
+// 导入必须校验：题号是「题库下标」，换了题库（比如导入了别的科目的备份）就整体错位，
+// 会把毫不相干的题标成错题。这里逐条校验范围与类型，越界的丢弃并如实告知。
 function importData(input){
   if(!input.files || !input.files[0]) return;
   var reader = new FileReader();
   reader.onload = function(e){
     try{
       var d = JSON.parse(e.target.result);
-      if(d.stats) LS.set('stats',d.stats);
-      if(d.wrong) LS.set('wrong',d.wrong);
-      if(d.done) LS.set('done',d.done);
-      if(d.rounds!=null) LS.set('rounds',d.rounds);
-      if(d.weights) LS.set('weights',d.weights);
+      if(!d || typeof d!=='object' || Array.isArray(d)) throw new Error('bad');
+      var dropped = 0, seen = 0;
+      function cleanIdx(arr){
+        if(!Array.isArray(arr)) return null;
+        seen += arr.length;
+        return arr.filter(function(x){
+          var ok = typeof x==='number' && isFinite(x) && x>=0 && x<BANK.length && x===Math.floor(x);
+          if(!ok) dropped++;
+          return ok;
+        });
+      }
+      var w = cleanIdx(d.wrong), dn = cleanIdx(d.done);
+      var wt = null;
+      if(d.weights && typeof d.weights==='object' && !Array.isArray(d.weights)){
+        wt = {};
+        for(var k in d.weights){
+          var ki = Number(k);
+          if(isFinite(ki) && ki>=0 && ki<BANK.length && ki===Math.floor(ki)) wt[k] = d.weights[k];
+          else dropped++;
+        }
+      }
+      var wrongTotal = (w ? w.length : 0);
+      var msg = '将导入学习进度：\n错题本 ' + wrongTotal + ' 题 · 已做题 ' + (dn ? dn.length : 0)
+              + ' 题 · 已完成 ' + (d.rounds || 0) + ' 轮';
+      if(d.v) msg += '\n\n备份版本：' + d.v + '（当前 ' + VERSION + '）';
+      if(d.total && d.total !== TOTAL){
+        msg += '\n\n⛔ 该备份属于另一个题库（'+d.total+' 题，当前题库 '+TOTAL+' 题），'
+             + '题号无法对应，导入后错题本会张冠李戴。\n建议不要导入。';
+      }
+      if(dropped > 0){
+        msg += '\n\n⚠ 有 ' + dropped + ' 条记录不属于当前题库（共 ' + TOTAL + ' 题），将被丢弃。';
+      }
+      msg += '\n\n导入会覆盖当前进度，确定继续吗？';
+      if(!confirm(msg)) return;
+      if(d.stats) LS.set('stats', d.stats);
+      if(w) LS.set('wrong', w);
+      if(dn) LS.set('done', dn);
+      if(d.rounds!=null) LS.set('rounds', d.rounds);
+      if(wt) LS.set('weights', wt);
       if(d.weak_review) LS.set('weak_review', Object.assign({on:false,days:1,last:0}, d.weak_review));
-      alert('导入成功！已恢复进度数据。'); render();
+      alert('导入完成。' + (dropped>0 ? '\n已丢弃 ' + dropped + ' 条不属于本题库的记录。' : ''));
+      render();
     }catch(err){ alert('导入失败：文件格式不正确。'); }
   };
   reader.readAsText(input.files[0]);

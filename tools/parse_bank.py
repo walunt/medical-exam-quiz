@@ -52,17 +52,82 @@ RE_LETTERS = re.compile(r"[A-E]")
 RE_AIMARK = re.compile(r"\s*`?\s*[（(]\s*AI\s*推测[^）)]*[）)]`?")
 # 原卷插图引用（Markdown 图片语法），图未收录
 RE_IMGREF = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# 作答空框残留（原卷用于填写答案的括号）
+RE_ANSBOX = re.compile(r"[\[【]\s*[\]】]")
+
+# ---------------------------------------------------------------- LaTeX 还原
+# 上游 OCR / md 转换把公式留成了 LaTeX（\( K^{+} \)、$Ca^{2+}$、Na\_{2}HPO\_{4}），
+# 直接显示就是乱码，这里统一还原成纯文本 / Unicode 上下标。
+GREEK = {"alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ", "epsilon": "ε",
+         "theta": "θ", "lambda": "λ", "mu": "μ", "nu": "ν", "pi": "π", "rho": "ρ",
+         "sigma": "σ", "tau": "τ", "phi": "φ", "chi": "χ", "psi": "ψ", "omega": "ω",
+         "Delta": "Δ", "Sigma": "Σ", "Omega": "Ω"}
+SUBMAP = str.maketrans("0123456789+-=()", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎")
+SUPMAP = str.maketrans("0123456789+-=()", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾")
+CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+
+
+def latex_to_text(s):
+    # 1) \mathrm{...} / \text{...} 取内容
+    s = re.sub(r"\\(?:mathrm|text|mathbf|mathit)\{([^{}]*)\}", r"\1", s)
+    # 2) 带圈数字 \textcircled{1}
+    def _circ(m):
+        n = int(m.group(1))
+        return CIRCLED[n - 1] if 1 <= n <= len(CIRCLED) else m.group(1)
+    s = re.sub(r"\\textcircled\{(\d+)\}", _circ, s)
+    # 3) 温度 $1^{\circ} \mathrm{C}$ -> 1℃（需在通用上标处理之前）
+    s = re.sub(r"\^\{\\circ\}\s*C", "℃", s)
+    s = re.sub(r"\^\{\\circ\}", "°", s)
+    # 4) 希腊字母与常用符号
+    for k, v in GREEK.items():
+        s = s.replace("\\" + k, v)
+    s = s.replace("\\sim", "~").replace("\\times", "×").replace("\\cdot", "·")
+    s = s.replace("\\circ", "°").replace("\\%", "%").replace("\\leq", "≤") \
+         .replace("\\geq", "≥").replace("\\pm", "±").replace("\\rightarrow", "→")
+    # 5) 数学定界符：\( \) $ \[ \]
+    s = re.sub(r"\\[()\[\]]", "", s)
+    s = s.replace("$", "")
+    # 6) 上下标：_{12} / _2 / ^{2+} / ^- / ^9
+    def _sub(m):
+        v = m.group(1) or m.group(2)
+        return v.translate(SUBMAP) if all(c in "0123456789+-=()" for c in v) else v
+    def _sup(m):
+        v = m.group(1) or m.group(2)
+        return v.translate(SUPMAP) if all(c in "0123456789+-=()" for c in v) else v
+    s = re.sub(r"_(?:\{([^{}]*)\}|([\w+\-]))", _sub, s)
+    s = re.sub(r"\^(?:\{([^{}]*)\}|([\w+\-]))", _sup, s)
+    # 7) 残留反斜杠
+    s = re.sub(r"\\([A-Za-z]+)", r"\1", s)
+    s = s.replace("\\", "")
+    # 8) 排版清理
+    # 上游把公式拆开时留下了空格：`NaHCO _3`、`cmH _2 O`、`V_1 ~ V_5`。
+    # 注意：剔除定界符后常留下连续两个空格，所以必须先归一空格再做拼接，
+    # 否则「下标 + 单空格 + 字母」的规则会因为两个空格而匹配不上。
+    s = re.sub(r"\s{2,}", " ", s)
+    s = re.sub(r"\s+([\u2080-\u2089\u2070-\u207f])", r"\1", s)             # 下标/上标前不留空格
+    s = re.sub(r"([\u2080-\u2089])\s+([A-Za-z])(?![A-Za-z])", r"\1\2", s)  # cmH₂ O -> cmH₂O
+    s = re.sub(r"([\u2080-\u2089])\s*/\s*(?=[A-Za-z])", r"\1/", s)          # NaHCO₃ /H -> NaHCO₃/H
+    s = re.sub(r"([\u2080-\u2089])\s+([A-Z][A-Za-z]*[\u2080-\u2089])", r"\1\2", s)  # H₂ CO₃ -> H₂CO₃
+    s = re.sub(r"\s*~\s*", "~", s)                                          # V₁ ~ V₅ -> V₁~V₅
+    s = re.sub(r"\s+([,;.、，。；：）)])", r"\1", s)
+    s = re.sub(r"([（(])\s+", r"\1", s)
+    s = re.sub(r"\s{2,}", " ", s)
+    return s.strip()
 
 
 def scrub_text(s, flags):
-    """剥离溯源标记与图片引用，同时记录该题的数据提示。"""
+    """剥离溯源标记、图片引用、作答空框，并还原 LaTeX。"""
     if RE_AIMARK.search(s):
         flags.add("部分内容为扫描件缺字后由 AI 补齐，请以原卷为准")
         s = RE_AIMARK.sub("", s)
     if RE_IMGREF.search(s):
         flags.add("原卷附有插图，本系统未收录图片，本题仅凭文字作答")
         s = RE_IMGREF.sub("", s)
+    if RE_ANSBOX.search(s):
+        s = RE_ANSBOX.sub("", s)
+    s = latex_to_text(s)
     return re.sub(r"\s{2,}", " ", s).strip()
+
 
 
 def scrub(q):
@@ -316,6 +381,11 @@ def main():
             issues.append("缺 AI 解析")
         if q["type"] == "B" and len(q["o"]) < 5:
             issues.append("共用选项不足")
+        # 选项文本重复：多为上游 OCR 把某个选项识别重复、同时漏掉了另一个。
+        # 不擅自补造选项，只标记出来交人工对照原卷。
+        ts = [o["t"].strip() for o in q["o"]]
+        if len(set(ts)) != len(ts):
+            issues.append("选项文本重复（疑源文档识别有误，需对照原卷）")
         if issues:
             report["issues"].append({
                 "type": q["type"], "paper": q["paper"], "n": q["n"],
@@ -326,6 +396,11 @@ def main():
     for q in bank:
         q.pop("_dup", None)
         scrub(q)
+        # 把「选项重复」也提到界面提示里，做题时能第一时间看到
+        ts = [o["t"].strip() for o in q["o"]]
+        if len(set(ts)) != len(ts):
+            extra = "选项中有重复项，疑为原卷扫描识别有误，建议对照原卷核对"
+            q["flag"] = (q["flag"] + "；" + extra) if q["flag"] else extra
 
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "bank.json"), "w", encoding="utf-8") as f:
