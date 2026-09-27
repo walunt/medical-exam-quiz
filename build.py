@@ -43,6 +43,31 @@ def main():
     meta = load("meta.json")
     figs = load("figures.json", required=False) or []
 
+    # ---- 构建期守卫：转义/公式残留一旦出现就直接构建失败 ----
+    # （v1.5 只洗了题干和选项，解析字段漏了 612 处，上线后才被核桃发现。
+    #   与其靠人眼，不如让构建替我们把关。）
+    import re
+    RESIDUE = re.compile(
+        r"\\|\$|_\{|\^\{|\\(?:mathrm|text|sim|times|circ|textcircled|alpha|beta|gamma|delta|theta|mu)\b")
+    def _scan(o, path, out):
+        if isinstance(o, str):
+            m = RESIDUE.search(o)
+            if m: out.append("%s: …%s…" % (path, o[max(0,m.start()-14):m.start()+22]))
+        elif isinstance(o, list):
+            for i, v in enumerate(o): _scan(v, "%s[%d]" % (path, i), out)
+        elif isinstance(o, dict):
+            for k, v in o.items(): _scan(v, "%s.%s" % (path, k), out)
+    residue = []
+    for name, obj in (("bank", bank), ("similar", similar), ("memo", memo), ("notes", notes), ("meta", meta)):
+        _scan(obj, name, residue)
+    # notes 的 body 是预渲染 HTML，&lt;/&gt; 属于合法转义（浏览器显示为 < / >）
+    if residue:
+        print("❌ 构建失败：数据中仍有转义/公式残留 %d 处：" % len(residue))
+        for r in residue[:10]: print("   " + r)
+        if len(residue) > 10: print("   … 另有 %d 处" % (len(residue) - 10))
+        raise SystemExit(1)
+    print("转义残留检查：通过（题库 / 相似题 / 速记 / 复习资料 / 统计 共 5 类数据）")
+
     # 把插图挂到题目上（不写回 bank.json，避免解析管线重跑时被冲掉）
     figmap, attached, missed = {}, 0, []
     for f in figs:
