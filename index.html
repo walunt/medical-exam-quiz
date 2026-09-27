@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>医学综合·冲刺刷题 — 成人高考专升本</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0ea5e9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="医学刷题">
 <style>
 :root {
   --bg:#f0f2f5; --card:#fff; --text:#1a1a2e; --sub:#666; --muted:#999;
@@ -413,7 +419,7 @@ var CHEAT = {"tip": "① 单选题（A/B 型）：答案落点分布 A 264 题(2
 //   注意：小数点后是「计数值」不是小数 —— v1.10 表示第 10 次修改，晚于 v1.9，
 //         不要按小数理解成 1.10 < 1.9，也不要因此擅自进整数。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.14';
+var VERSION = 'v1.15';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
@@ -1138,6 +1144,46 @@ function renderStats(){
     }
   }
   h += '</div>';
+
+  // ===== 模拟考成绩历史 =====
+  var ehist = LS.get('examHistory', []);
+  h += '<div class="card"><h2>模拟考成绩 <span style="color:var(--sub);font-size:13px">共 '
+    + ehist.length + ' 次</span></h2>';
+  if(!ehist.length){
+    h += '<p style="color:var(--sub);line-height:1.8">还没有模拟考记录。去「模拟考试」考一次，'
+       + '成绩会自动记在这里，方便追踪进步。</p>';
+  } else {
+    // 分数走势（迷你柱状，按时间顺序，及格线 60% 用红虚线标注）
+    var ehMax = 100, ehN = ehist.length;
+    h += '<div class="st-trend" style="height:110px">';
+    for(var ei=0; ei<ehN; ei++){
+      var eh = ehist[ei], pctE = eh.rate;
+      var ehH = pctE > 0 ? Math.max(8, Math.round(pctE)) : 2;
+      var ehCol = pctE>=60 ? 'var(--correct)' : (pctE>=40 ? 'var(--warn)' : 'var(--wrong)');
+      h += '<div class="st-day eh-col"><div class="st-day-val" style="font-size:10px">'+pctE+'%</div>'
+        + '<div class="st-bar'+(pctE===0?' empty':'')+'" style="height:'+ehH+'%;background:'+ehCol+'"></div>'
+        + '<div class="st-day-label" style="font-size:9px">'+(ehN-ei)+'</div></div>';
+    }
+    h += '</div>';
+    h += '<p style="color:var(--muted);font-size:12px;text-align:center;margin:2px 0 10px">'
+      + '每次模拟考正确率（按时间先后，柱越高越好；60% 为及格线）</p>';
+    // 历史列表（新的在前）
+    h += '<div style="max-height:280px;overflow-y:auto">';
+    for(var ei2=ehN-1; ei2>=0; ei2--){
+      var eh2 = ehist[ei2];
+      var d2 = new Date(eh2.ts);
+      var dt2 = (d2.getMonth()+1)+'/'+d2.getDate()+' '+('0'+d2.getHours()).slice(-2)+':'+('0'+d2.getMinutes()).slice(-2);
+      var pass2 = eh2.rate>=60;
+      h += '<div class="p-row" style="padding:7px 0">'
+        + '<span>'+dt2+' · '+(eh2.total||'')+' 题</span>'
+        + '<b style="color:'+(pass2?'var(--correct)':'var(--wrong)')+'">'+eh2.cor+'/'+eh2.total+' · '+eh2.rate+'%'
+        + (pass2?' ✅':' ❌')+'</b></div>';
+    }
+    h += '</div>';
+    h += '<p style="color:var(--muted);font-size:11px;margin-top:8px">'
+      + '历史保存在本机，可通过「导出进度」备份。最多保留最近 50 次。</p>';
+  }
+  h += '</div>';
   h += footerHTML();
   app.innerHTML = h;
 }
@@ -1362,15 +1408,29 @@ function finishExam(){
   var wrong=getWrong();
   var stats=LS.get('stats',{total:0,correct:0});
   var done=getDone();
+  var byType={A:{c:0,n:0},B:{c:0,n:0},X:{c:0,n:0}};
+  var cor=0;
   for(var i=0;i<EXAM.qlist.length;i++){
     var q=BANK[EXAM.qlist[i]], ans=EXAM.answers[EXAM.qlist[i]]||[];
     var ok = ans.length>0 && ans.slice().sort().join('')===q.a.split('').sort().join('');
-    stats.total++; if(ok) stats.correct++;
+    stats.total++; if(ok){ stats.correct++; cor++; }
     bumpDaily(ok); bumpCat(q, ok);
+    if(byType[q.type]){ byType[q.type].n++; if(ok) byType[q.type].c++; }
     if(ans.length>0 && done.indexOf(EXAM.qlist[i])<0) done.push(EXAM.qlist[i]);
     if(!ok && wrong.indexOf(EXAM.qlist[i])<0) wrong.push(EXAM.qlist[i]);
   }
   LS.set('stats', stats); LS.set('wrong', wrong); LS.set('done', done);
+
+  // 记录一次模拟考成绩（用于学习统计里的历史与走势）
+  var tot = EXAM.qlist.length;
+  var hist = LS.get('examHistory', []);
+  hist.push({ ts: Date.now(),
+    total: tot, cor: cor,
+    rate: tot ? Math.round(cor / tot * 1000) / 10 : 0,
+    a: byType.A.c, an: byType.A.n, b: byType.B.c, bn: byType.B.n, x: byType.X.c, xn: byType.X.n });
+  while(hist.length > 50) hist.shift();
+  LS.set('examHistory', hist);
+
   render();
 }
 function examReport(){
@@ -1473,6 +1533,8 @@ function applyImport(d, w, dn, wt, dropped){
   if(wt) LS.set('weights', wt);
   if(d.daily && typeof d.daily==='object') LS.set('daily', d.daily);
   if(d.chstats && typeof d.chstats==='object') LS.set('chstats', d.chstats);
+  if(Array.isArray(d.examHistory)) LS.set('examHistory', d.examHistory.filter(function(x){
+    return x && typeof x.ts==='number' && typeof x.cor==='number' && typeof x.total==='number'; }));
   if(d.weak_review) LS.set('weak_review', Object.assign({on:false,days:1,last:0}, d.weak_review));
   appAlert('导入完成。' + (dropped>0 ? '\n已丢弃 ' + dropped + ' 条不属于本题库的记录。' : ''));
   render();
@@ -1632,7 +1694,8 @@ function resetAll(){
     + '· 已完成轮次：' + rounds + ' 轮\n'
     + '· 题目权重：' + nWt + ' 项\n'
     + '· 按日统计：' + nDaily + ' 天\n'
-    + '· 章节掌握度：' + nCat + ' 章\n\n'
+    + '· 章节掌握度：' + nCat + ' 章\n'
+    + '· 模拟考成绩：' + LS.get('examHistory', []).length + ' 次\n\n'
     + '共 ' + keys.length + ' 项存储记录将被删除。\n\n'
     + '清空后无法恢复。建议先点下面的「先导出备份」存一份。';
   appConfirm('清空所有学习数据', detail, '继续', true, function(){
@@ -1672,6 +1735,13 @@ function doReset(keys, st, nWrong, nDone, rounds){
 
 S.theme=LS.get('theme','light');
 render();
+
+// ===== PWA：注册 Service Worker（离线可用 + 可添加到主屏）=====
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){ /* 静默：不支持或不成功不影响使用 */ });
+  });
+}
 </script>
 </body>
 </html>

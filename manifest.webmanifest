@@ -1,0 +1,15 @@
+{
+  "name": "医学综合·冲刺刷题",
+  "short_name": "医学刷题",
+  "description": "成人高考专升本《医学综合》单文件离线刷题系统",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
