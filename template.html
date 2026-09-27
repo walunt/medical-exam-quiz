@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>医学综合·冲刺刷题 — 成人高考专升本</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -23,6 +23,10 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; transition:background .3s; }
+/* iOS PWA（standalone + black-translucent）下，页面顶到状态栏后面。
+   用一条与页面同色的实心条垫住状态栏区域，避免 iOS 26「液态玻璃」把页面顶部套上模糊。 */
+body::before { content:''; position:fixed; top:0; left:0; right:0;
+  height:env(safe-area-inset-top, 0px); background:var(--bg); z-index:200; pointer-events:none; }
 #app { max-width:1000px; margin:0 auto; padding:20px 20px 90px; }
 .hidden{display:none!important;}
 
@@ -151,10 +155,11 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
 .mobile-exambar{display:none;}    /* 同上 */
 
 @media(max-width:760px){
-  #app{padding:12px 12px 80px;}
-  .topbar{padding:0 0 10px;}
-  .topbar .brand{font-size:16px;}
-  .tab-btn{padding:6px 10px;font-size:13px;}
+  #app{padding:calc(env(safe-area-inset-top, 0px) + 12px) 12px calc(env(safe-area-inset-bottom, 0px) + 92px);}
+  .topbar{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:0 0 12px;}
+  .topbar .brand{grid-column:1 / -1;text-align:center;font-size:17px;margin-bottom:2px;}
+  .topbar .sp{display:none;}
+  .tab-btn{padding:8px 2px;font-size:12.5px;text-align:center;border-radius:9px;}
   .q-card{padding:14px;}
   .q-stem{font-size:15px;line-height:1.7;margin:12px 0 14px;}
   .options{gap:8px;}
@@ -173,16 +178,28 @@ input[type=range]{ width:100%; accent-color:var(--accent); }
   .card h2{font-size:16px;margin-bottom:8px;}
   .home-hero h1{font-size:22px;}
   .home-hero .sub{font-size:12px;}
-  .stats-grid{gap:8px;margin:12px 0;}
-  .stats-grid .s-item{padding:10px 6px;}
-  .stats-grid .s-item .n{font-size:22px;}
+  .stats-grid{grid-template-columns:repeat(3,1fr);gap:7px;margin:12px 0;}
+  .stats-grid .s-item{padding:10px 4px;border-radius:9px;}
+  .stats-grid .s-item .n{font-size:20px;}
+  .stats-grid .s-item .l{font-size:10.5px;}
+  .stats-grid .s-item.undone{grid-column:1 / -1;flex-direction:row;gap:12px;padding:10px 14px;justify-content:flex-start;}
+  .stats-grid .s-item.undone .n{font-size:22px;}
+  .stats-grid .s-item.undone .l{font-size:11.5px;text-align:left;flex:1;}
+  .stats-grid .s-item.undone .mini-cta{margin-top:0;width:auto;flex-shrink:0;padding:7px 12px;}
+  .prog-wrap{padding:12px 14px;margin-bottom:14px;}
+  .prog-label{font-size:12px;}
+  .home-hero{padding:14px 0 4px;}
+  .home-hero h1{font-size:21px;}
+  .home-hero .sub{font-size:11.5px;line-height:1.65;margin-top:6px;}
   .mode-grid{gap:8px;margin:10px 0;}
   .mode-btn{padding:10px 12px;}
   /* 单列时答题后固定底部"下一题" */
-  .mobile-next{display:block;position:fixed;left:10px;right:10px;bottom:10px;z-index:60;}
+  .mobile-next{display:block;position:fixed;left:10px;right:10px;
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px));z-index:60;}
   .mobile-next .btn{width:100%;padding:13px;font-size:16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);}
   /* 考试模式：固定底栏（上一题/下一题/交卷） */
-  .mobile-exambar{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:60;gap:10px;}
+  .mobile-exambar{display:flex;position:fixed;left:10px;right:10px;
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px));z-index:60;gap:10px;}
   .mobile-exambar .btn{flex:1;padding:13px;font-size:16px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);}
   #app{padding-bottom:100px;}   /* 给固定底栏留空间，避免内容被遮 */
 }
@@ -419,7 +436,7 @@ var CHEAT = __CHEAT__;
 //   注意：小数点后是「计数值」不是小数 —— v1.10 表示第 10 次修改，晚于 v1.9，
 //         不要按小数理解成 1.10 < 1.9，也不要因此擅自进整数。
 //   版本号旁固定标注「本系统由核桃制作」，统一由 footerHTML() 输出，避免多处不一致。
-var VERSION = 'v1.15';
+var VERSION = 'v1.16';
 var CREDIT = '本系统由核桃制作';
 function footerHTML(){
   return '<div class="footer">'+CREDIT+' · '+VERSION+
